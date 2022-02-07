@@ -1,0 +1,15 @@
+FILE_NAMES=("Lenna" "animal" "girl" "view")
+STEPS=(50 100 150)
+DIVS=(1 2 3 4)
+
+echo $STEPS
+for NAME in ${FILE_NAMES[@]}
+do
+    for DIV in ${DIVS[@]}
+    do
+        for STEP in ${STEPS[@]}
+        do
+            python3 make_drawfile.py --max_step=$STEP --actor=actor.pkl --renderer=renderer.pkl --img=img/${NAME}.png --divide=${DIV} --title ${NAME}_s${STEP}_d${DIV}
+        done
+    done
+done
