@@ -1,0 +1,3 @@
+[submodule "ICCV2019-LearningToPaint"]
+	path = ICCV2019-LearningToPaint
+	url = https://github.com/megvii-research/ICCV2019-LearningToPaint
