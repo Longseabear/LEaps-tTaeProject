@@ -26,3 +26,8 @@ $ python3 ICCV2019-LearningToPaint/baseline/test.py --max_step=100 --actor=actor
 $ ffmpeg -r 10 -f image2 -i output/generated%d.png -s 512x512 -c:v libx264 -pix_fmt yuv420p video.mp4 -q:v 0 -q:a 0
 (make a painting process video)
 ```
+
+
+
+# Curve point simulation
+
