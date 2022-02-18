@@ -26,21 +26,24 @@ class Action():
         self.points[::2] *= height
         self.points[1::2] *= width
 
+        self.width = width
+        self.height = height
+
         self.thickness = (data[9], data[10])
         self.transparency = (data[11], data[12])
         self.bgr = data[13:]
 
-        self.brush = Brush(self.bgr, self.transparency, key="test.png")
+        self.brush = Brush(self.bgr, self.transparency, key="random")
 
     def reset(self):
-        self.brush = Brush(self.bgr, self.transparency, key="test.png")
+        self.brush = Brush(self.bgr, self.transparency, key="random")
 
     def __repr__(self):
         return "division: {}, gIdx {}, points {}, thickness {}, transparency {}, bgr {}".\
             format(self.division, self.grid_idx, self.points, self.thickness, self.transparency, self.bgr)
 
 if __name__ =="__main__":
-    draw_file_path = "../drawfile_output/girl_s100_d1/girl_s100_d1_meta.txt"
+    draw_file_path = "../drawfile_output/girl_s50_d4/girl_s50_d4_meta.txt"
     draw_file = open(draw_file_path)
 
     im_h, im_w = [int(i) for i in draw_file.readline().split(' ')]
@@ -48,17 +51,23 @@ if __name__ =="__main__":
     canvas = Canvas(256, 256)
 
     actions = [Action([float(i) for i in str[:-1].split(' ')], canvas.height, canvas.width) for str in draw_file.readlines()]
+    cv2.imshow('a', canvas.raster)
 
     for act in actions:
-        sample_num = 1000
-        print(act)
+        sample_num = 100
+
 #        act.points = np.float32([0, 0, 128, 64, 0, 256])
 #        act.points = np.float32([131.11410688, 136.84358144, 154.35334757, 126.14695484, 175.09512192, 116.64090624])
-        curve = BezierQuadOffsetRender(act, sample_num, max_thickness=0.25*canvas.width)
+        curve = BezierQuadOffsetRenderTestWithAnimation(act, sample_num, sample_interval=5, max_thickness=0.25*canvas.width)
         act.brush.setAlpha(act.brush.alpha * 0.25)
-
         for i in range(4):
-            curve.render(canvas)
-            act.reset()
-            cv2.imshow('a',canvas.raster)
-            cv2.waitKey(10)
+            curve.make(canvas)
+            a = np.linspace(0, 1, 25)
+            a = a * a
+            for t in a:
+                curve.render(canvas, t)
+                cv2.imshow('a', canvas.raster)
+                cv2.waitKey(5)
+            curve.reset()
+        cv2.waitKey(100)
+    cv2.waitKey(0)

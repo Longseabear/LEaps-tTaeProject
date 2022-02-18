@@ -34,9 +34,13 @@ class Brush():
         self.alpha = np.array([alpha[0], alpha[1]])
         self.alpha_map = np.stack([np.linspace(alpha[0], alpha[1], self.h), ] * self.w).transpose()
 
+    def sample_alpha(self, alpha):
+        alpha_map = np.stack([np.linspace(alpha[0], alpha[1], self.h), ] * self.w).transpose()
+        return alpha_map
+
     def setAlpha(self, alpha):
-        self.alpha = np.array([alpha[0], alpha[1]])
-        self.alpha_map = np.stack([np.linspace(alpha[0], alpha[1], self.h), ] * self.w).transpose()
+        self.alpha = alpha
+        self.alpha_map = self.sample_alpha(alpha)
 
     def sample_p(self, t):
         src_cols = np.linspace(0, self.w, 2)

@@ -258,6 +258,8 @@ class BezierQuadOffsetRender():
         self.cw_curve = BezierQuad(self.cw_points, sample_num, sample_interval)
         self.ccw_curve = BezierQuad(self.ccw_points, sample_num, sample_interval)
 
+#        self.start_round = self.base_curve.get_point(1.02)
+
     def get_all_points(self):
         t = self.base_curve.get_all_t_sample()
 
@@ -268,8 +270,6 @@ class BezierQuadOffsetRender():
 
     def isFinish(self):
         return self.base_curve.isFinish()
-
-
 
     def render(self, canvas):
         height, width = canvas.height, canvas.width
@@ -299,10 +299,219 @@ class BezierQuadOffsetRender():
         alpha = alpha[:,:,None]
 
         tmp = np.zeros_like(alpha)
-        cv2.circle(tmp, (int(self.p0[1]), int(self.p0[0])), int(self.thickness0 * self.max_thickness), self.act.brush.alpha[0], -1)
-        cv2.circle(tmp, (int(self.p2[1]), int(self.p2[0])), int(self.thickness1 * self.max_thickness), self.act.brush.alpha[1], -1)
-        alpha += tmp * (alpha == 0)
+        # cv2.circle(tmp, (int(self.p0[1]), int(self.p0[0])), int(self.thickness0 * self.max_thickness), self.act.brush.alpha[0], -1)
+        # cv2.circle(tmp, (int(self.p2[1]), int(self.p2[0])), int(self.thickness1 * self.max_thickness), self.act.brush.alpha[1], -1)
+        # alpha += tmp * (alpha == 0)
 
         canvas.raster = canvas.raster * (1 - alpha) + self.act.brush.color * alpha
 
+        return canvas
+
+class BezierQuadOffsetRenderTest():
+    # points -> float pixel position
+    # sample interval is pixel unit
+    def __init__(self, act, sample_num=100, sample_interval=5, max_thickness=0.25 * 128):
+        self.max_thickness = max_thickness
+        self.sample_interval = sample_interval
+        self.sample_num = sample_num
+        self.act = act
+
+        self.y0, self.x0, self.y1, self.x1, self.y2, self.x2 = act.points
+        self.p0 = np.array([self.y0, self.x0])
+        self.p1 = np.array([self.y1, self.x1])
+        self.p2 = np.array([self.y2, self.x2])
+
+        self.thickness0, self.thickness1 = act.thickness
+
+        self.v0 = self.p1 - self.p0
+        self.v1 = self.p2 - self.p1
+
+        # TEST
+        self.p0 = self.p0 + rotation180(toUnitVector(self.v0)) * self.thickness0 * self.max_thickness
+        self.p2 = self.p2 + toUnitVector(self.v1) * self.thickness0 * self.max_thickness
+
+        self.cw_d0 = toUnitVector(rotation90(self.v0)) * max_thickness * self.thickness0
+        self.ccw_d0 = toUnitVector(rotation270(self.v0)) * max_thickness * self.thickness0
+
+        self.cw_d2 = toUnitVector(rotation90(self.v1)) * max_thickness * self.thickness1
+        self.ccw_d2 = toUnitVector(rotation270(self.v1)) * max_thickness * self.thickness1
+
+        self.cw_p0 = self.p0 + self.cw_d0
+        self.ccw_p0 = self.p0 + self.ccw_d0
+
+        if np.abs(np.sum(toUnitVector(self.v0) * toUnitVector(self.v1))) > 0.95:
+            self.cw_p1 = (self.p0 + self.cw_d0 + self.p2 + self.cw_d2)/2.
+            self.ccw_p1 = (self.p0 + self.ccw_d0 + self.p2 + self.ccw_d2)/2.
+        else:
+            self.cw_p1 = getIntersectionPoint(self.p0 + self.cw_d0, self.v0, self.p2 + self.cw_d2, self.v1)
+            self.ccw_p1 = getIntersectionPoint(self.p0 + self.ccw_d0, self.v0, self.p2 + self.ccw_d2, self.v1)
+
+        self.cw_p2 = self.p2 + self.cw_d2
+        self.ccw_p2 = self.p2 + self.ccw_d2
+
+        self.base_curve = BezierQuad([self.p0[0], self.p0[1], self.p1[0], self.p1[1], self.p2[0], self.p2[1]], sample_num, sample_interval)
+        self.cw_points = [self.cw_p0[0], self.cw_p0[1], self.cw_p1[0], self.cw_p1[1], self.cw_p2[0], self.cw_p2[1]]
+        self.ccw_points = [self.ccw_p0[0], self.ccw_p0[1], self.ccw_p1[0], self.ccw_p1[1], self.ccw_p2[0], self.ccw_p2[1]]
+
+        self.cw_curve = BezierQuad(self.cw_points, sample_num, sample_interval)
+        self.ccw_curve = BezierQuad(self.ccw_points, sample_num, sample_interval)
+
+    def get_all_points(self):
+        t = self.base_curve.get_all_t_sample()
+
+        cw_y, cw_x  = self.cw_curve.get_point(t)
+        ccw_y, ccw_x = self.ccw_curve.get_point(t)
+
+        return np.float32([cw_y, cw_x, ccw_y, ccw_x]).transpose(), t
+
+    def isFinish(self):
+        return self.base_curve.isFinish()
+
+    def render(self, canvas):
+        height, width = canvas.height, canvas.width
+
+        all_points, sampled_t = self.get_all_points()
+        src_pts = self.act.brush.sample_p(sampled_t)
+        dst_pts = all_points.reshape((-1, 2))[:,::-1]
+
+            # cv2.line(canvas.raster, tuple(pts[0]), tuple(pts[1]), color=(1, 0, 0))
+            # cv2.line(canvas.raster, tuple(pts[1]), tuple(pts[2]), color=(0, 1, 0))
+            # cv2.line(canvas.raster, tuple(pts[2]), tuple(pts[0]), color=(0, 0, 1))
+            # # cv2.circle(canvas.raster, (pts[0][0], pts[0][1]), 2, , thickness=-1)
+            # # cv2.circle(canvas.raster, (pts[1][0], pts[1][1]), 2, color=(0, 1, 0), thickness=-1)
+            # # cv2.circle(canvas.raster, (pts[2][0], pts[2][1]), 2, color=(0, 0, 1), thickness=-1)
+            # cv2.imshow('a',canvas.raster)
+            # cv2.waitKey(0)
+        # for i in range(len(all_points) - 1):
+        #     canvas_ptr = np.float32([all_points[i], all_points[i + 1]])
+        #     render(scene.raster, act.brush, act.bgr[::], canvas_ptr.reshape(4, 2), (t[i], t[i + 1]))
+
+        tform = PiecewiseAffineTransform()
+        if not tform.estimate(dst_pts, src_pts):
+            return canvas
+
+        d = int(self.act.division)
+        py, px = int(self.act.grid_idx[0]), int(self.act.grid_idx[1])
+        dy, dx = self.act.height//d, self.act.width//d
+        alpha = self.act.brush.sample(0, 1)
+
+        alpha = warp(alpha, tform, output_shape=(height, width))
+        alpha = cv2.resize(alpha, (dy, dx))
+        alpha = alpha[:,:,None]
+
+        canvas.raster[py*dy:(py+1)*dy, px*dx:(px+1)*dx] = canvas.raster[py*dy:(py+1)*dy, px*dx:(px+1)*dx] * (1 - alpha) + self.act.brush.color * alpha
+
+        return canvas
+
+class BezierQuadOffsetRenderTestWithAnimation():
+    # points -> float pixel position
+    # sample interval is pixel unit
+    def __init__(self, act, sample_num=100, sample_interval=5, max_thickness=0.25 * 128):
+        self.max_thickness = max_thickness
+        self.sample_interval = sample_interval
+        self.sample_num = sample_num
+        self.act = act
+
+        self.y0, self.x0, self.y1, self.x1, self.y2, self.x2 = act.points
+        self.p0 = np.array([self.y0, self.x0])
+        self.p1 = np.array([self.y1, self.x1])
+        self.p2 = np.array([self.y2, self.x2])
+
+        self.thickness0, self.thickness1 = act.thickness
+
+        self.v0 = self.p1 - self.p0
+        self.v1 = self.p2 - self.p1
+
+        # TEST
+        self.p0 = self.p0 + rotation180(toUnitVector(self.v0)) * self.thickness0 * self.max_thickness
+        self.p2 = self.p2 + toUnitVector(self.v1) * self.thickness0 * self.max_thickness
+
+        self.cw_d0 = toUnitVector(rotation90(self.v0)) * max_thickness * self.thickness0
+        self.ccw_d0 = toUnitVector(rotation270(self.v0)) * max_thickness * self.thickness0
+
+        self.cw_d2 = toUnitVector(rotation90(self.v1)) * max_thickness * self.thickness1
+        self.ccw_d2 = toUnitVector(rotation270(self.v1)) * max_thickness * self.thickness1
+
+        self.cw_p0 = self.p0 + self.cw_d0
+        self.ccw_p0 = self.p0 + self.ccw_d0
+
+        if np.abs(np.sum(toUnitVector(self.v0) * toUnitVector(self.v1))) > 0.95:
+            self.cw_p1 = (self.p0 + self.cw_d0 + self.p2 + self.cw_d2)/2.
+            self.ccw_p1 = (self.p0 + self.ccw_d0 + self.p2 + self.ccw_d2)/2.
+        else:
+            self.cw_p1 = getIntersectionPoint(self.p0 + self.cw_d0, self.v0, self.p2 + self.cw_d2, self.v1)
+            self.ccw_p1 = getIntersectionPoint(self.p0 + self.ccw_d0, self.v0, self.p2 + self.ccw_d2, self.v1)
+
+        self.cw_p2 = self.p2 + self.cw_d2
+        self.ccw_p2 = self.p2 + self.ccw_d2
+
+        self.base_curve = BezierQuad([self.p0[0], self.p0[1], self.p1[0], self.p1[1], self.p2[0], self.p2[1]], sample_num, sample_interval)
+        self.cw_points = [self.cw_p0[0], self.cw_p0[1], self.cw_p1[0], self.cw_p1[1], self.cw_p2[0], self.cw_p2[1]]
+        self.ccw_points = [self.ccw_p0[0], self.ccw_p0[1], self.ccw_p1[0], self.ccw_p1[1], self.ccw_p2[0], self.ccw_p2[1]]
+
+        self.cw_curve = BezierQuad(self.cw_points, sample_num, sample_interval)
+        self.ccw_curve = BezierQuad(self.ccw_points, sample_num, sample_interval)
+
+        self.image = None
+        self.threshold = None
+
+    def get_all_points(self):
+        t = self.base_curve.get_all_t_sample()
+
+        cw_y, cw_x  = self.cw_curve.get_point(t)
+        ccw_y, ccw_x = self.ccw_curve.get_point(t)
+
+        return np.float32([cw_y, cw_x, ccw_y, ccw_x]).transpose(), t
+
+    def isFinish(self):
+        return self.base_curve.isFinish()
+
+    def make(self, canvas):
+        height, width = canvas.height, canvas.width
+
+        all_points, sampled_t = self.get_all_points()
+        src_pts = self.act.brush.sample_p(sampled_t)
+        dst_pts = all_points.reshape((-1, 2))[:,::-1]
+
+        tform = PiecewiseAffineTransform()
+        if not tform.estimate(dst_pts, src_pts):
+            self.image = np.zeros([height, width, 1])
+            self.threshold = np.ones([height, width, 1])
+            return
+
+        d = int(self.act.division)
+        py, px = int(self.act.grid_idx[0]), int(self.act.grid_idx[1])
+        dy, dx = self.act.height//d, self.act.width//d
+        alpha = self.act.brush.sample(0, 1)
+
+        threshold = self.act.brush.sample_alpha((0,1))
+
+
+        alpha = warp(alpha, tform, output_shape=(height, width))
+        threshold = warp(threshold, tform, output_shape=(height, width))
+        alpha = cv2.resize(alpha, (dy, dx))
+        threshold = cv2.resize(threshold, (dy, dx))
+
+        alpha = alpha[:,:,None]
+        threshold = threshold[:,:, None]
+
+        self.image = alpha
+        self.threshold = threshold
+        self.previous_t = 0
+
+    def reset(self):
+        if self.threshold is not None:
+            self.threshold = np.zeros_like(self.threshold)
+        if self.act is not None:
+            self.act.reset()
+        self.previous_t = 0
+
+    def render(self, canvas, t):
+        d = int(self.act.division)
+        py, px = int(self.act.grid_idx[0]), int(self.act.grid_idx[1])
+        dy, dx = self.act.height//d, self.act.width//d
+
+        alpha = self.image * ((self.threshold < t) & (self.threshold >= self.previous_t))
+        self.previous_t = t
+        canvas.raster[py*dy:(py+1)*dy, px*dx:(px+1)*dx] = canvas.raster[py*dy:(py+1)*dy, px*dx:(px+1)*dx] * (1 - alpha) + self.act.brush.color * alpha
         return canvas
